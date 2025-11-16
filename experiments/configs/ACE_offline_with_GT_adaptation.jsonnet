@@ -72,16 +72,17 @@ local curator_model_config = {
                 "verbose": true,
             },
             "generator_prompt_file_path": experiment_prompts_path + "/appworld_react_generator_prompt.txt",
-            "reflector_prompt_file_path": experiment_prompts_path + "/appworld_react_reflector_no_gt_prompt.txt",
+            "reflector_prompt_file_path": experiment_prompts_path + "/appworld_react_reflector_with_gt_prompt.txt",
             "curator_prompt_file_path": experiment_prompts_path + "/appworld_react_curator_prompt.txt", 
             "initial_playbook_file_path": experiment_playbooks_path + "/appworld_initial_playbook.txt", 
-            "trained_playbook_file_path": experiment_playbooks_path + "/appworld_online_trained_playbook.txt",   
+            "trained_playbook_file_path": experiment_playbooks_path + "/appworld_offline_trained_with_gt_playbook.txt",  
             "ignore_multiple_calls": true,
             "max_steps": 40,
             "max_cost_overall": 1000,
             "max_cost_per_task": 10,
             "log_lm_calls": true,
+            "use_gt_code": true
         },
-        "dataset": "test_normal",
+        "dataset": "train",
     }
 }

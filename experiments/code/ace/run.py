@@ -1,9 +1,9 @@
 from typing import Any
 
 from appworld.task import Task, load_task_ids
-from appworld_experiments.code.ace.agent import Agent
-from appworld_experiments.code.ace.star_agent import StarAgent
 from appworld_experiments.code.ace.base_agent import BaseAgent
+from appworld_experiments.code.ace.evaluation_agent import Agent
+from appworld_experiments.code.ace.adaptation_agent import StarAgent
 
 def run_experiment(
     experiment_name: str,

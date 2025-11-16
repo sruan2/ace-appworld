@@ -14,7 +14,7 @@ from appworld.common.utils import (
     render_template,
     unique,
 )
-from appworld_experiments.code.ace.agent import Agent, ExecutionIO
+from appworld_experiments.code.ace.evaluation_agent import Agent, ExecutionIO
 from appworld_experiments.code.ace.api_predictor import APIPredictor
 
 

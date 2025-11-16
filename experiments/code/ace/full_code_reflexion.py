@@ -12,7 +12,7 @@ from appworld.common.utils import (
 )
 from appworld.environment import SAID_AVAILABLE_IMPORTS
 from appworld.task import Task
-from appworld_experiments.code.ace.agent import Agent, ExecutionIO
+from appworld_experiments.code.ace.evaluation_agent import Agent, ExecutionIO
 from appworld_experiments.code.ace.api_predictor import APIPredictor
 
 from .playbook import apply_curator_operations, extract_json_from_text
