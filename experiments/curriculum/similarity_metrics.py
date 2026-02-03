@@ -173,7 +173,7 @@ def get_embedding(
     text: str,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
-    model: str = "text-embedding-3-small"
+    model: str = "text-embedding-3-large"
 ) -> List[float]:
     """Get embedding vector for a text using OpenAI API.
 
@@ -181,7 +181,7 @@ def get_embedding(
         text: Text to embed
         api_key: OpenAI API key (if None, will try to use OPENAI_API_KEY env var)
         base_url: API base URL (default: None, uses OpenAI's default)
-        model: Embedding model to use (default: text-embedding-3-small)
+        model: Embedding model to use (default: text-embedding-3-large)
                Other options: "text-embedding-3-large", "text-embedding-ada-002"
 
     Returns:
@@ -277,7 +277,7 @@ def calculate_embedding_similarity(
 def compute_embeddings_batch(
     texts: List[str],
     api_key: Optional[str] = None,
-    model: str = "text-embedding-3-small"
+    model: str = "text-embedding-3-large"
 ) -> Dict[str, List[float]]:
     """Pre-compute embeddings for a list of texts.
 
