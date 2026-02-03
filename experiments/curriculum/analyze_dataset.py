@@ -13,6 +13,8 @@ Available similarity metrics:
     - levenshtein: Character-level edit distance
     - oracle: Ground truth clustering using task family IDs (e.g., "76f2c72" from "76f2c72_2")
               Note: threshold is ignored for oracle since it uses exact family ID matching
+    - embedding: Semantic similarity using OpenAI embeddings API
+                 Requires: OPENAI_API_KEY environment variable
 """
 
 import argparse
@@ -21,7 +23,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from similarity_metrics import calculate_similarity, compute_idf_scores
+from similarity_metrics import calculate_similarity, compute_embeddings_batch, compute_idf_scores
 
 
 def load_dataset(dataset_name: str) -> List[str]:
@@ -189,7 +191,8 @@ def _analyze_oracle_similarity(
 def analyze_instruction_similarity(
     task_difficulty_pairs: List[Tuple[str, int, str]],
     similarity_metric: str = "jaccard",
-    threshold: float = 0.7
+    threshold: float = 0.7,
+    embedding_model: str = "text-embedding-3-small"
 ) -> Dict:
     """Analyze instruction similarity patterns in the dataset."""
     # For oracle metric, we cluster by task ID directly
@@ -225,10 +228,20 @@ def analyze_instruction_similarity(
     total_instructions_count = sum(len(tasks) for tasks in instruction_to_tasks.values())
     exact_duplicates = total_instructions_count - unique_instructions  # Number of duplicate copies
 
-    # Compute IDF scores if using cosine similarity
+    # Prepare metric-specific data
     idf_scores = None
+    embeddings_cache = None
+    api_key = None
+
     if similarity_metric == "cosine":
         idf_scores = compute_idf_scores(instructions)
+    elif similarity_metric == "embedding":
+        # Pre-compute all embeddings for efficiency
+        print(f"  Computing embeddings for {len(instructions)} unique instructions using model '{embedding_model}'...")
+        import os
+        api_key = os.environ.get("OPENAI_API_KEY")
+        embeddings_cache = compute_embeddings_batch(instructions, api_key, model=embedding_model)
+        print(f"  Embeddings computed successfully")
 
     # Clustering based on similarity
     # Group instructions that are similar to each other
@@ -249,7 +262,12 @@ def analyze_instruction_similarity(
             # Check similarity with any instruction in current cluster
             is_similar = False
             for cluster_inst in cluster:
-                sim_score = calculate_similarity(cluster_inst, inst2, similarity_metric, idf_scores)
+                sim_score = calculate_similarity(
+                    cluster_inst, inst2, similarity_metric,
+                    idf_scores=idf_scores,
+                    embeddings_cache=embeddings_cache,
+                    api_key=api_key
+                )
                 if sim_score >= threshold:
                     is_similar = True
                     break
@@ -328,8 +346,7 @@ def print_similarity_analysis(similarity_data: Dict):
 def save_analysis(
     task_difficulty_pairs: List[Tuple[str, int, str]],
     dataset_name: str,
-    similarity_metric: str = "jaccard",
-    threshold: float = 0.7
+    similarity_data: Dict
 ):
     """Save formatted analysis to JSON file in datasets folder."""
     output_file = Path("data/datasets") / f"{dataset_name}_analysis.json"
@@ -359,9 +376,6 @@ def save_analysis(
         if difficulty >= 0
     ]
 
-    # Analyze instruction similarity
-    similarity_data = analyze_instruction_similarity(task_difficulty_pairs, similarity_metric, threshold)
-
     # Create output data
     output_data = {
         "dataset": dataset_name,
@@ -390,15 +404,21 @@ def main():
     parser.add_argument(
         "--similarity-metric",
         type=str,
-        choices=["jaccard", "cosine", "levenshtein", "oracle"],
+        choices=["jaccard", "cosine", "levenshtein", "oracle", "embedding"],
         default="jaccard",
-        help="Similarity metric to use for clustering (default: jaccard). 'oracle' uses task family IDs for ground truth clustering."
+        help="Similarity metric to use for clustering (default: jaccard). 'oracle' uses task family IDs for ground truth clustering. 'embedding' uses OpenAI API for semantic embeddings (requires OPENAI_API_KEY env var)."
     )
     parser.add_argument(
         "--threshold",
         type=float,
         default=0.7,
         help="Similarity threshold for clustering (default: 0.7). Note: ignored when using 'oracle' metric."
+    )
+    parser.add_argument(
+        "--embedding-model",
+        type=str,
+        default="text-embedding-3-small",
+        help="Embedding model to use when --similarity-metric=embedding (default: text-embedding-3-small). Other OpenAI options: text-embedding-3-large, text-embedding-ada-002"
     )
 
     args = parser.parse_args()
@@ -421,13 +441,14 @@ def main():
     similarity_data = analyze_instruction_similarity(
         task_difficulty_pairs,
         similarity_metric=args.similarity_metric,
-        threshold=args.threshold
+        threshold=args.threshold,
+        embedding_model=args.embedding_model
     )
     print_similarity_analysis(similarity_data)
 
     # Save analysis
     dataset_name = Path(args.dataset).stem
-    save_analysis(task_difficulty_pairs, dataset_name, args.similarity_metric, args.threshold)
+    save_analysis(task_difficulty_pairs, dataset_name, similarity_data)
 
 
 if __name__ == "__main__":

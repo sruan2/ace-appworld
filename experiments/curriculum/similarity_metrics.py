@@ -10,9 +10,11 @@ Available metrics:
 - TF-IDF Cosine similarity: Weighted term similarity with IDF scoring
 - Levenshtein similarity: Character-level edit distance similarity
 - Oracle similarity: Ground truth similarity based on task family ID
+- Embedding similarity: Semantic similarity using sentence embeddings (requires API key)
 """
 
 import math
+import os
 import re
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional
@@ -167,6 +169,135 @@ def calculate_oracle_similarity(task_id1: str, task_id2: str) -> float:
     return 1.0 if family1 == family2 else 0.0
 
 
+def get_embedding(
+    text: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: str = "text-embedding-3-small"
+) -> List[float]:
+    """Get embedding vector for a text using OpenAI API.
+
+    Args:
+        text: Text to embed
+        api_key: OpenAI API key (if None, will try to use OPENAI_API_KEY env var)
+        base_url: API base URL (default: None, uses OpenAI's default)
+        model: Embedding model to use (default: text-embedding-3-small)
+               Other options: "text-embedding-3-large", "text-embedding-ada-002"
+
+    Returns:
+        Embedding vector as list of floats
+
+    Raises:
+        ImportError: If openai package is not installed
+        ValueError: If API key is not provided
+    """
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise ImportError("openai package required for embedding similarity. Install with: pip install openai")
+
+    if api_key is None:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "API key required for embedding similarity. "
+                "Set OPENAI_API_KEY environment variable or pass api_key parameter."
+            )
+
+    # Create client with or without custom base_url
+    if base_url:
+        client = OpenAI(api_key=api_key, base_url=base_url)
+    else:
+        client = OpenAI(api_key=api_key)
+
+    # Use OpenAI's embedding model
+    try:
+        response = client.embeddings.create(
+            model=model,
+            input=text
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        # Provide helpful error message with available models
+        raise RuntimeError(
+            f"Failed to get embedding with model '{model}'. "
+            f"Error: {str(e)}. "
+            f"Available OpenAI models: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002"
+        ) from e
+
+
+def calculate_embedding_similarity(
+    s1: str,
+    s2: str,
+    embeddings_cache: Optional[Dict[str, List[float]]] = None,
+    api_key: Optional[str] = None
+) -> float:
+    """Calculate cosine similarity between embeddings of two texts.
+
+    Args:
+        s1: First string
+        s2: Second string
+        embeddings_cache: Optional cache of pre-computed embeddings {text: embedding}
+        api_key: OpenAI API key
+
+    Returns:
+        Cosine similarity score between 0.0 and 1.0
+    """
+    if not s1 or not s2:
+        return 0.0
+
+    # Get embeddings from cache or compute them
+    if embeddings_cache and s1 in embeddings_cache:
+        emb1 = embeddings_cache[s1]
+    else:
+        emb1 = get_embedding(s1, api_key)
+        if embeddings_cache is not None:
+            embeddings_cache[s1] = emb1
+
+    if embeddings_cache and s2 in embeddings_cache:
+        emb2 = embeddings_cache[s2]
+    else:
+        emb2 = get_embedding(s2, api_key)
+        if embeddings_cache is not None:
+            embeddings_cache[s2] = emb2
+
+    # Calculate cosine similarity
+    dot_product = sum(a * b for a, b in zip(emb1, emb2))
+    magnitude1 = math.sqrt(sum(a * a for a in emb1))
+    magnitude2 = math.sqrt(sum(b * b for b in emb2))
+
+    if magnitude1 == 0 or magnitude2 == 0:
+        return 0.0
+
+    # Cosine similarity ranges from -1 to 1, normalize to 0 to 1
+    similarity = dot_product / (magnitude1 * magnitude2)
+    return (similarity + 1) / 2
+
+
+def compute_embeddings_batch(
+    texts: List[str],
+    api_key: Optional[str] = None,
+    model: str = "text-embedding-3-small"
+) -> Dict[str, List[float]]:
+    """Pre-compute embeddings for a list of texts.
+
+    Args:
+        texts: List of texts to embed
+        api_key: OpenAI API key
+        model: Embedding model to use
+
+    Returns:
+        Dictionary mapping each text to its embedding vector
+    """
+    embeddings_cache = {}
+    for i, text in enumerate(texts):
+        if text and text not in embeddings_cache:
+            print(f"    Progress: {i+1}/{len(texts)}", end='\r')
+            embeddings_cache[text] = get_embedding(text, api_key, model=model)
+    print(f"    Progress: {len(texts)}/{len(texts)} - Complete!")
+    return embeddings_cache
+
+
 def compute_idf_scores(texts: List[str]) -> Dict[str, float]:
     """Compute IDF (Inverse Document Frequency) scores for all terms in a text corpus.
 
@@ -201,17 +332,21 @@ def calculate_similarity(
     metric: str = "jaccard",
     idf_scores: Dict[str, float] = None,
     task_id1: Optional[str] = None,
-    task_id2: Optional[str] = None
+    task_id2: Optional[str] = None,
+    embeddings_cache: Optional[Dict[str, List[float]]] = None,
+    api_key: Optional[str] = None
 ) -> float:
     """Calculate similarity between two strings using the specified metric.
 
     Args:
         s1: First string (instruction text or task ID for oracle)
         s2: Second string (instruction text or task ID for oracle)
-        metric: Similarity metric to use ('jaccard', 'cosine', 'levenshtein', 'oracle')
+        metric: Similarity metric to use ('jaccard', 'cosine', 'levenshtein', 'oracle', 'embedding')
         idf_scores: IDF scores (required for cosine similarity)
         task_id1: First task ID (required for oracle similarity)
         task_id2: Second task ID (required for oracle similarity)
+        embeddings_cache: Cache of embeddings (for embedding similarity)
+        api_key: API key for embedding service (for embedding similarity)
 
     Returns:
         Similarity score between 0.0 and 1.0
@@ -231,5 +366,7 @@ def calculate_similarity(
         if task_id1 is None or task_id2 is None:
             raise ValueError("Task IDs required for oracle similarity")
         return calculate_oracle_similarity(task_id1, task_id2)
+    elif metric == "embedding":
+        return calculate_embedding_similarity(s1, s2, embeddings_cache, api_key)
     else:
         raise ValueError(f"Unknown similarity metric: {metric}")
