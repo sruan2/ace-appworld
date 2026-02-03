@@ -4,17 +4,18 @@ Analyze task difficulty distribution and instruction similarity from a dataset f
 
 Usage (run from repository root):
     python3 experiments/curriculum/analyze_dataset.py --dataset train.txt
-    python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric cosine --threshold 0.8
+    python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric cosine:0.8
     python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric oracle
+    python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric embedding:0.85 --embedding-model text-embedding-3-large
 
 Available similarity metrics:
-    - jaccard: Word-based set similarity
-    - cosine: TF-IDF cosine similarity
-    - levenshtein: Character-level edit distance
-    - oracle: Ground truth clustering using task family IDs (e.g., "76f2c72" from "76f2c72_2")
-              Note: threshold is ignored for oracle since it uses exact family ID matching
-    - embedding: Semantic similarity using OpenAI embeddings API
-                 Requires: OPENAI_API_KEY environment variable
+    - jaccard:THRESHOLD - Word-based set similarity (e.g., jaccard:0.7)
+    - cosine:THRESHOLD - TF-IDF cosine similarity (e.g., cosine:0.8)
+    - levenshtein:THRESHOLD - Character-level edit distance (e.g., levenshtein:0.75)
+    - oracle - Ground truth clustering using task family IDs (e.g., "76f2c72" from "76f2c72_2")
+               Note: threshold not needed for oracle since it uses exact family ID matching
+    - embedding:THRESHOLD - Semantic similarity using OpenAI embeddings API (e.g., embedding:0.85)
+                            Requires: OPENAI_API_KEY environment variable
 """
 
 import argparse
@@ -393,7 +394,29 @@ def save_analysis(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Analyze task difficulty distribution from a dataset file"
+        description="Analyze task difficulty distribution from a dataset file",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic analysis with default jaccard metric and threshold
+  python3 experiments/curriculum/analyze_dataset.py --dataset train.txt
+
+  # Use cosine similarity with custom threshold
+  python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric cosine:0.8
+
+  # Use oracle clustering (task family IDs)
+  python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric oracle
+
+  # Use embedding similarity with custom model
+  python3 experiments/curriculum/analyze_dataset.py --dataset train.txt --similarity-metric embedding:0.85 --embedding-model text-embedding-3-large
+
+Available similarity metrics:
+  - jaccard:THRESHOLD (e.g., jaccard:0.7)
+  - cosine:THRESHOLD (e.g., cosine:0.8)
+  - levenshtein:THRESHOLD (e.g., levenshtein:0.75)
+  - oracle (no threshold needed)
+  - embedding:THRESHOLD (e.g., embedding:0.85, requires OPENAI_API_KEY)
+        """
     )
     parser.add_argument(
         "--dataset",
@@ -404,24 +427,40 @@ def main():
     parser.add_argument(
         "--similarity-metric",
         type=str,
-        choices=["jaccard", "cosine", "levenshtein", "oracle", "embedding"],
-        default="jaccard",
-        help="Similarity metric to use for clustering (default: jaccard). 'oracle' uses task family IDs for ground truth clustering. 'embedding' uses OpenAI API for semantic embeddings (requires OPENAI_API_KEY env var)."
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.7,
-        help="Similarity threshold for clustering (default: 0.7). Note: ignored when using 'oracle' metric."
+        default="jaccard:0.7",
+        help="Similarity metric with optional threshold in format 'metric:threshold' (e.g., 'cosine:0.8', 'oracle'). Default: jaccard:0.7"
     )
     parser.add_argument(
         "--embedding-model",
         type=str,
         default="text-embedding-3-small",
-        help="Embedding model to use when --similarity-metric=embedding (default: text-embedding-3-small). Other OpenAI options: text-embedding-3-large, text-embedding-ada-002"
+        help="Embedding model to use when similarity-metric uses 'embedding' (default: text-embedding-3-small). Other OpenAI options: text-embedding-3-large, text-embedding-ada-002"
     )
 
     args = parser.parse_args()
+
+    # Parse similarity metric and threshold
+    if ':' in args.similarity_metric:
+        parts = args.similarity_metric.split(':', 1)
+        similarity_metric = parts[0]
+        try:
+            threshold = float(parts[1])
+        except ValueError:
+            parser.error(f"Invalid threshold in --similarity-metric argument: {parts[1]}")
+    else:
+        # For oracle or if user specifies metric without threshold
+        similarity_metric = args.similarity_metric
+        if similarity_metric == "oracle":
+            threshold = 0.0  # Will be ignored for oracle
+        else:
+            # Default threshold for metrics without explicit threshold
+            threshold = 0.7
+            print(f"Note: No threshold specified, using default: {threshold}")
+
+    # Validate similarity metric
+    valid_metrics = ["jaccard", "cosine", "levenshtein", "oracle", "embedding"]
+    if similarity_metric not in valid_metrics:
+        parser.error(f"Invalid similarity metric: {similarity_metric}. Must be one of {valid_metrics}")
 
     # Load dataset
     print(f"Loading dataset: {args.dataset}")
@@ -437,11 +476,11 @@ def main():
     print_task_list(task_difficulty_pairs)
 
     # Analyze and print instruction similarity
-    print(f"Analyzing instruction similarity (metric: {args.similarity_metric}, threshold: {args.threshold})...")
+    print(f"Analyzing instruction similarity (metric: {similarity_metric}, threshold: {threshold})...")
     similarity_data = analyze_instruction_similarity(
         task_difficulty_pairs,
-        similarity_metric=args.similarity_metric,
-        threshold=args.threshold,
+        similarity_metric=similarity_metric,
+        threshold=threshold,
         embedding_model=args.embedding_model
     )
     print_similarity_analysis(similarity_data)
