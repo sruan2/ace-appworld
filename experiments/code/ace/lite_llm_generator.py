@@ -310,7 +310,7 @@ class LiteLLMGenerator:
             return {"content": "", "tool_calls": [], "cost": 0}
 
         success = False
-        for _ in range(self.max_retries):
+        for attempt in range(self.max_retries):
             try:
                 arguments = {
                     "model": self.model,
@@ -331,6 +331,7 @@ class LiteLLMGenerator:
                     print(traceback.format_exc())
                     exit()
                 print(f"Encountered LM Error: {exception.message[:200].strip()}...")
+                print(f"Retrying... (Attempt {attempt + 1}/{self.max_retries})")
                 print(f"Will try again in {self.retry_after_n_seconds} seconds.")
                 time.sleep(self.retry_after_n_seconds)
                 pass
