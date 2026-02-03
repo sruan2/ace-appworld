@@ -145,7 +145,10 @@ def non_cached_chat_completion(
 
     if provider.strip().lower() == "sambanova":
         from sambanova import SambaNova
-        client = SambaNova()
+        import httpx
+        # Set longer timeout: 60s for connection, 600s for read/write
+        timeout = httpx.Timeout(60.0, connect=60.0, read=600.0, write=600.0)
+        client = SambaNova(timeout=timeout)
     elif provider.strip().lower() == "together":
         from together import Together
         client = Together()
