@@ -150,7 +150,7 @@ def cluster_tasks_by_similarity(
     task_ids: List[str],
     similarity_metric: str,
     threshold: float,
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "text-embedding-3-large"
 ) -> List[List[Dict]]:
     """Cluster tasks by instruction similarity, preserving original order within clusters.
 
@@ -632,8 +632,8 @@ Difficulty modes:
     parser.add_argument(
         "--embedding-model",
         type=str,
-        default="text-embedding-3-small",
-        help="Embedding model to use when --cluster uses 'embedding' metric (default: text-embedding-3-small)"
+        default="text-embedding-3-large",
+        help="Embedding model to use when --cluster uses 'embedding' metric (default: text-embedding-3-large)"
     )
 
     args = parser.parse_args()
