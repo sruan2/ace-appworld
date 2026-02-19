@@ -193,7 +193,7 @@ def analyze_instruction_similarity(
     task_difficulty_pairs: List[Tuple[str, int, str]],
     similarity_metric: str = "jaccard",
     threshold: float = 0.7,
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "text-embedding-3-large"
 ) -> Dict:
     """Analyze instruction similarity patterns in the dataset."""
     # For oracle metric, we cluster by task ID directly
@@ -433,8 +433,8 @@ Available similarity metrics:
     parser.add_argument(
         "--embedding-model",
         type=str,
-        default="text-embedding-3-small",
-        help="Embedding model to use when similarity-metric uses 'embedding' (default: text-embedding-3-small). Other OpenAI options: text-embedding-3-large, text-embedding-ada-002"
+        default="text-embedding-3-large",
+        help="Embedding model to use when similarity-metric uses 'embedding' (default: text-embedding-3-large). Other OpenAI options: text-embedding-3-small, text-embedding-ada-002"
     )
 
     args = parser.parse_args()
